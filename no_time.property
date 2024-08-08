@@ -1,0 +1,11 @@
+property {
+    define{
+        sensor_1_send = clt.get_sensor_ids[0] == 1;
+        sensor_2_send = clt.get_sensor_ids[1] == 1;
+        sensor_3_send = clt.get_sensor_ids[2] == 1;
+        sensor_4_send = clt.get_sensor_ids[3] == 1;
+    }
+    LTL {
+        no_starvations : G(F(sensor_1_send) && F(sensor_2_send) && F(sensor_3_send) && F(sensor_4_send));
+    }
+}
