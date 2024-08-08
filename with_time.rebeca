@@ -1,0 +1,112 @@
+reactiveclass Sensor(3) {
+    knownrebecs{
+		CompUnit cpu;
+	}
+	statevars{
+		byte id;
+	}
+	Sensor (byte sens_id){
+		self.id = sens_id;
+		self.gather_data();
+	}
+	msgsrv gather_data() {
+		byte data = 1;
+		cpu.pack_data(data, self.id) deadline(3);
+		self.gather_data() after(4);
+	}
+}
+
+reactiveclass CompUnit(3) {
+	knownrebecs{
+		RCD rcd;
+	}
+	statevars {
+		byte id;
+		byte[4] packed_data;
+		byte counter;
+	}
+	CompUnit (byte cpu_id) {
+		self.id = cpu_id;
+		counter = 0;
+	}
+	msgsrv pack_data(byte data, byte sensor_id){
+		delay(1);
+		if(counter < 4){
+			packed_data[counter] = data;
+			counter ++;		
+			if(counter == 4){
+				rcd.get_data_from_cpu(packed_data) after(1) deadline(2);
+				counter = 0;
+			}	
+		}
+	}
+}
+
+reactiveclass RCD(3) {
+	knownrebecs {
+		Collector collect;
+	}
+	statevars {
+		byte id;
+	}
+	RCD (byte rcd_id) {
+		self.id = rcd_id;
+	}
+	msgsrv get_data_from_cpu(byte[4] data){
+		delay(1);
+		collect.collect_data_from_rcds(data, self.id) after(1) deadline(3);
+	}
+}
+
+reactiveclass Collector(4) {
+	statevars {
+		boolean[4] already_sent;
+	}
+	Collector () {
+		for(byte i = 0; i < 4; i++){
+			already_sent[i] = false;
+		}
+	}
+	msgsrv collect_data_from_rcds(byte[4] data, byte rcd_id) {
+		delay(1);
+		if(!already_sent[rcd_id - 1]) {
+			already_sent[rcd_id - 1] = true;
+			if(all_has_sent()){
+				reset_sends();
+			}
+		}
+		else{
+			byte[4] recived_data = data;
+		}
+	}
+	boolean all_has_sent(){
+		for(byte i = 0; i < 4; i++){
+			if(already_sent[i] == false) return true;
+		}
+		return false;
+	}
+	void reset_sends() {
+		for(byte i = 0; i < 4; i++){
+			already_sent[i] = false;
+		}
+	}
+}
+main {
+	Sensor sensor1(cu):(1);
+	Sensor sensor2(cu):(2);
+	Sensor sensor3(cu2):(3);
+	Sensor sensor4(cu2):(4);
+	Sensor sensor5(cu3):(5);
+	Sensor sensor6(cu3):(6);
+	Sensor sensor7(cu3):(7);
+	Sensor sensor8(cu4):(8);
+	CompUnit cu(rcd):(1);
+	CompUnit cu2(rcd2):(2);
+	CompUnit cu3(rcd3):(3);
+	CompUnit cu4(rcd4):(4);
+	RCD rcd(clt):(1);
+	RCD rcd2(clt):(2);
+	RCD rcd3(clt):(3);
+	RCD rcd4(clt):(4);
+	Collector clt():();
+}
