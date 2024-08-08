@@ -1,0 +1,173 @@
+reactiveclass Sensor (3) {
+	knownrebecs{
+		CompUnit cpu;
+	}
+	statevars{
+		byte id;
+	}
+	Sensor (byte sens_id){
+		self.id = sens_id;
+		self.gather_data();
+	}
+	msgsrv gather_data(){
+		byte data = 1;
+		cpu.pack_data(data, self.id);
+	}
+}
+
+reactiveclass CompUnit(3) {
+	knownrebecs{
+		RCD rcd;
+	}
+	statevars {
+		byte id;
+		byte counter;
+		byte[4] pack_data;
+		byte[4] sensor_id;
+		Sensor[4] sensor;
+	}
+	CompUnit(byte cpu_id){
+		self.id = cpu_id;
+		self.counter = 0;
+	}
+	msgsrv pack_data(byte data, byte sens_id){
+		if(counter < 2){
+			pack_data[counter] = data;
+			sensor_id[counter] = sens_id;
+			sensor[counter] = ((Sensor)sender);
+			((Sensor)sender).gather_data();
+			counter ++;
+		}
+		else if(counter >= 2 && counter < 4){
+			pack_data[counter] = data;
+			sensor[counter] = ((Sensor)sender);
+			sensor_id[counter] = sens_id;
+			counter ++;
+			if(counter == 4){
+				self.send_rcd();
+			}
+		}
+	}
+
+	msgsrv send_rcd(){
+		rcd.getting_data_from_cpu(pack_data, self.sensor_id);
+	}
+	msgsrv reset_counter(){
+		call_sensors();
+		counter = 0;
+	}
+	void call_sensors(){
+		byte count1 = 0;
+		byte count2 = 0;
+		for(byte i = 0; i < 4; i++){
+			if(self.sensor_id[i] % 2 == 0 && count1 == 0){
+				count1 ++;
+				sensor[i].gather_data();
+			}
+			if((self.sensor_id[i] % 2 == 1) && (count2 == 0)){
+				count2 ++;
+				sensor[i].gather_data();
+			}
+			if(count2 == 1 && count1 == 1) break;
+		}
+	}
+
+}
+
+reactiveclass RCD(3) {
+	knownrebecs {
+		Collector collect;
+	}
+	statevars {
+		byte id;
+	}
+	RCD(byte rcd_id) {
+		self.id = rcd_id;
+	}
+    msgsrv getting_data_from_cpu(byte[4] data, byte[4] sensor_ids) {
+        collect.collecting_from_rcd(data, self.id, sensor_ids, ((CompUnit)sender));
+    }
+}
+
+reactiveclass Collector(3) {
+	statevars {
+		boolean[2] who_sent_data;
+		byte[4] get_sensor_ids;
+	}
+	Collector () {
+		for(byte i = 0; i < 2; i++){
+			who_sent_data[i] = false;
+		}
+		for(byte i = 0; i < 4; i++){
+			get_sensor_ids[i] = 0;
+		}
+	}
+	msgsrv collecting_from_rcd(byte[4] data, byte rcd_id, byte[4] sensor_ids, CompUnit cu){
+		if(all_has_sent()){
+			reset_arrays();
+		}
+		if(!has_already_sent(rcd_id)){
+			byte[4] recived_data = data;	
+			who_sent_data[rcd_id-1] = true;
+			update_sensors(sensor_ids);
+		}
+		cu.reset_counter();
+	}
+
+	boolean all_has_sent(){
+		for(byte i = 0; i < 2; i++){
+			if(who_sent_data[i] == false) return false;
+		}
+		return true;
+	}
+
+	boolean has_already_sent(byte rcd_id){
+		if(who_sent_data[rcd_id-1] == true) return true;
+		return false;
+	}
+
+	void update_sensors(byte[4] sensor_ids){
+		byte count1 = 0;
+		byte count2 = 0;
+		for(byte i = 0; i < 4; i++){
+			if(sensor_ids[i]%2 == 0 && count1 == 0){
+				self.get_sensor_ids[sensor_ids[i]-1] += 1;
+				count1 ++;
+			}
+			if(sensor_ids[i]%2 == 1 && count2 == 0){
+				self.get_sensor_ids[sensor_ids[i]-1] += 1;
+				count2 ++;
+			}
+			if(count1 == 1 && count2 == 1) break;
+		}
+	}
+
+	void reset_arrays(){
+		for(byte i = 0; i < 2; i++){
+			who_sent_data[i] = false;
+		}
+		for(byte i = 0; i < 4; i++){
+			get_sensor_ids[i] = 0;
+		}
+	}
+}
+
+main {
+	Sensor sensor1(cu):(1);
+	Sensor sensor2(cu):(2);
+	Sensor sensor3(cu2):(3);
+	Sensor sensor4(cu2):(4);
+	// Sensor sensor5(cu3):(5);
+	// Sensor sensor6(cu3):(6);
+	// Sensor sensor7(cu4):(7);
+	// Sensor sensor8(cu4):(8);
+	CompUnit cu(rcd):(1);
+	CompUnit cu2(rcd2):(2);
+	// CompUnit cu3(rcd3):(3);
+	// CompUnit cu4(rcd4):(4);
+	RCD rcd(clt):(1);
+	RCD rcd2(clt):(2);
+	// RCD rcd3(clt):(3);
+	// RCD rcd4(clt):(4);
+	Collector clt():();
+}
